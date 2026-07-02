@@ -9,7 +9,7 @@
              (драйвер asyncpg підставляється автоматично)
 """
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from sqlalchemy import BigInteger, DateTime, Float, Integer, String, select, delete, func, TypeDecorator
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine, AsyncSession
@@ -86,7 +86,7 @@ async def init_db() -> None:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def add_entry(user_id: int, parsed) -> Entry:
+async def add_entry(user_id: int, parsed, created_at: datetime | None = None) -> Entry:
     async with Session() as s:
         entry = Entry(
             user_id=user_id,
@@ -97,8 +97,9 @@ async def add_entry(user_id: int, parsed) -> Entry:
             volume=parsed.volume,
             est_1rm=parsed.est_1rm,
             raw=parsed.raw,
-            created_at=parsed.created_at or datetime.now(timezone.utc),
         )
+        if created_at is not None:
+            entry.created_at = created_at
         s.add(entry)
         await s.commit()
         await s.refresh(entry)
@@ -137,14 +138,13 @@ async def exercise_history(user_id: int, exercise: str, limit: int = 30) -> list
         return list(res.scalars())
 
 
-async def exercise_series(user_id: int, exercise: str) -> list[Entry]:
-    """Повна історія вправи в хронологічному порядку (для графіка)."""
+async def exercise_series(user_id: int, exercise: str, days: int | None = None) -> list[Entry]:
+    """Історія вправи в хронологічному порядку (для графіка). days=None -> уся."""
+    conds = [Entry.user_id == user_id, Entry.exercise.like(f"%{exercise.lower()}%")]
+    if days:
+        conds.append(Entry.created_at >= datetime.now(timezone.utc) - timedelta(days=days))
     async with Session() as s:
-        res = await s.execute(
-            select(Entry)
-            .where(Entry.user_id == user_id, Entry.exercise.like(f"%{exercise.lower()}%"))
-            .order_by(Entry.created_at)
-        )
+        res = await s.execute(select(Entry).where(*conds).order_by(Entry.created_at))
         return list(res.scalars())
 
 
@@ -168,6 +168,25 @@ async def delete_last(user_id: int) -> Entry | None:
         if entry:
             await s.delete(entry)
             await s.commit()
+        return entry
+
+
+async def get_entry(user_id: int, entry_id: int) -> Entry | None:
+    async with Session() as s:
+        entry = await s.get(Entry, entry_id)
+        if entry and entry.user_id == user_id:
+            return entry
+        return None
+
+
+async def delete_entry(user_id: int, entry_id: int) -> Entry | None:
+    """Видаляє конкретний запис, лише якщо він належить цьому користувачу."""
+    async with Session() as s:
+        entry = await s.get(Entry, entry_id)
+        if entry is None or entry.user_id != user_id:
+            return None
+        await s.delete(entry)
+        await s.commit()
         return entry
 
 

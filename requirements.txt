@@ -1,0 +1,5 @@
+aiogram>=3.20,<4
+SQLAlchemy[asyncio]>=2.0
+aiosqlite>=0.20
+asyncpg>=0.30
+matplotlib>=3.8

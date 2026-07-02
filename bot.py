@@ -51,11 +51,16 @@ def fmt_entry(e) -> str:
     return line
 
 
+def fmt_entry_time(e) -> str:
+    return e.created_at.astimezone(TZ).strftime("%d.%m %H:%M")
+
+
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
     await message.answer(
         "👋 Привіт! Я веду журнал твоїх тренувань.\n\n"
         "Просто надішли мені вправу в такому форматі:\n"
+        "<code>2026-06-01 | жим лежачи 60 3х10</code>  (старе тренування)\n"
         "<code>жим лежачи 60 3х10</code>\n"
         "<code>тяга блока 55 4х12</code>\n"
         "<code>підтягування 3х8</code>  (без ваги = власна вага)\n"
@@ -82,6 +87,7 @@ async def cmd_start(message: Message):
 async def cmd_help(message: Message):
     await message.answer(
         "<b>Формат запису</b>\n"
+        "<code>2026-06-01 | жим лежачи 60 3х10</code> — старе тренування\n"
         "<code>назва [вага] підходиХповторення</code>\n\n"
         "Приклади:\n"
         "• <code>присідання 80 5х5</code>\n"
@@ -159,7 +165,7 @@ async def cmd_stats(message: Message):
 
     lines.append("Останнє (нове зверху):")
     for e in entries[:10]:
-        d = e.created_at.astimezone(TZ).strftime("%d.%m")
+        d = fmt_entry_time(e)
         lines.append(f"   {d}: {fmt_weight(e.weight)} · {e.sets}×{e.total_reps//e.sets if e.sets else 0}")
     lines.append(f"\n📈 Графік: /chart {query}")
     await message.answer("\n".join(lines), parse_mode="HTML")
@@ -292,7 +298,7 @@ async def cmd_history(message: Message):
         return
     lines = ["🕑 <b>Останні записи</b>", ""]
     for e in entries:
-        d = e.created_at.astimezone(TZ).strftime("%d.%m %H:%M")
+        d = fmt_entry_time(e)
         lines.append(f"{d} — {fmt_entry(e)}")
     await message.answer("\n".join(lines), parse_mode="HTML")
 
@@ -339,7 +345,8 @@ async def log_workout(message: Message):
     for p in parsed:
         await db.add_entry(message.from_user.id, p)
         extra = f" · 1ПМ≈{p.est_1rm:g}" if p.est_1rm else ""
-        saved.append(f"✅ {p.exercise} — {fmt_weight(p.weight)}, {p.sets}×{'/'.join(map(str,p.reps))}{extra}")
+        when = p.created_at.astimezone(TZ).strftime("%d.%m %H:%M") if p.created_at else "зараз"
+        saved.append(f"✅ {when} · {p.exercise} — {fmt_weight(p.weight)}, {p.sets}×{'/'.join(map(str,p.reps))}{extra}")
     await message.answer("\n".join(saved))
 
 

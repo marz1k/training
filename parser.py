@@ -2,6 +2,8 @@
 Парсер записів про тренування.
 
 Підтримувані формати (регістр не важливий):
+    2026-06-01 | жим лежачи 60 3х10
+    01.06.2026: тяга блока 55 4*12
     жим лежачи 60 3х10
     жим лежачи 60кг 3x10
     тяга блока 55 4*12
@@ -12,6 +14,7 @@
 Роздільник підходів×повторень: х (укр), x (лат), *, ×
 """
 import re
+from datetime import datetime
 from dataclasses import dataclass, field
 
 
@@ -19,6 +22,9 @@ from dataclasses import dataclass, field
 SETS_REPS_RE = re.compile(r"^(\d{1,2})\s*[хx×*]\s*([\d,]+)$", re.IGNORECASE)
 # токен ваги: 60 / 60кг / 60kg / 22.5 / 22,5кг
 WEIGHT_RE = re.compile(r"^(\d+(?:[.,]\d+)?)\s*(?:кг|kg|кґ)?$", re.IGNORECASE)
+DATE_PREFIX_RE = re.compile(
+    r"^(?P<date>(?:\d{4}-\d{2}-\d{2})|(?:\d{1,2}\.\d{1,2}(?:\.\d{2,4})?))(?:\s*[|:-]\s*|\s+)(?P<rest>.+)$"
+)
 
 
 @dataclass
@@ -28,6 +34,7 @@ class ParsedSet:
     sets: int
     reps: list[int]               # список повторень по підходах
     raw: str
+    created_at: datetime | None = None
 
     @property
     def reps_avg(self) -> float:
@@ -63,11 +70,35 @@ def _parse_reps(reps_token: str, sets_count: int) -> list[int]:
     return parts
 
 
+def _parse_date_prefix(line: str) -> tuple[str, datetime | None]:
+    """Повертає (очищений_рядок, дата), якщо рядок починається з дати."""
+    m = DATE_PREFIX_RE.match(line)
+    if not m:
+        return line, None
+
+    date_token = m.group("date")
+    rest = m.group("rest").strip()
+
+    parsed_date = None
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d.%m.%y", "%d.%m"):
+        try:
+            parsed_date = datetime.strptime(date_token, fmt)
+            if fmt == "%d.%m":
+                parsed_date = parsed_date.replace(year=datetime.now().year)
+            break
+        except ValueError:
+            continue
+
+    return (rest, parsed_date) if parsed_date else (line, None)
+
+
 def parse_line(line: str) -> ParsedSet | None:
     """Парсить один рядок. Повертає None, якщо це не схоже на запис вправи."""
     line = line.strip()
     if not line:
         return None
+    raw_line = line
+    line, created_at = _parse_date_prefix(line)
     tokens = line.split()
     if len(tokens) < 2:
         return None
@@ -110,7 +141,8 @@ def parse_line(line: str) -> ParsedSet | None:
         weight=weight,
         sets=sets_count,
         reps=reps,
-        raw=line,
+        raw=raw_line,
+        created_at=created_at,
     )
 
 

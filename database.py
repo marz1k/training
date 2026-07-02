@@ -97,6 +97,7 @@ async def add_entry(user_id: int, parsed) -> Entry:
             volume=parsed.volume,
             est_1rm=parsed.est_1rm,
             raw=parsed.raw,
+            created_at=parsed.created_at or datetime.now(timezone.utc),
         )
         s.add(entry)
         await s.commit()

@@ -11,6 +11,7 @@
     підтягування 3х8
 """
 import asyncio
+import html
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -44,7 +45,7 @@ def fmt_weight(w: float | None) -> str:
 
 def fmt_entry(e) -> str:
     reps = e.total_reps // e.sets if e.sets else e.total_reps
-    line = f"{e.exercise} — {fmt_weight(e.weight)} · {e.sets}×{reps}"
+    line = f"{html.escape(e.exercise)} — {fmt_weight(e.weight)} · {e.sets}×{reps}"
     if e.est_1rm:
         line += f" · 1ПМ≈{e.est_1rm:g}"
     return line
@@ -63,8 +64,8 @@ async def cmd_start(message: Message):
         "Команди:\n"
         "/today — тренування за сьогодні\n"
         "/week — за 7 днів\n"
-        "/stats <вправа> — прогрес по вправі\n"
-        "/chart <вправа> — 📈 графік прогресу ваги\n"
+        "/stats &lt;вправа&gt; — прогрес по вправі\n"
+        "/chart &lt;вправа&gt; — 📈 графік прогресу ваги\n"
         "/volume [днів] — 📊 тоннаж по днях (типово 14)\n"
         "/compare A vs B — ⚖️ порівняти дві вправи\n"
         "/list — усі вправи, які ти робив\n"
@@ -278,8 +279,8 @@ async def cmd_list(message: Message):
     if not ex:
         await message.answer("Ти ще нічого не записував.")
         return
-    lines = ["🗂 <b>Твої вправи:</b>", ""] + [f"• {e}" for e in ex]
-    lines.append("\nПрогрес: /stats <назва> · Графік: /chart <назва>")
+    lines = ["🗂 <b>Твої вправи:</b>", ""] + [f"• {html.escape(e)}" for e in ex]
+    lines.append("\nПрогрес: /stats &lt;назва&gt; · Графік: /chart &lt;назва&gt;")
     await message.answer("\n".join(lines), parse_mode="HTML")
 
 
